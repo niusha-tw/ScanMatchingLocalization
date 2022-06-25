@@ -35,7 +35,7 @@ using namespace std;
 #include <pcl/registration/ndt.h>
 #include <pcl/console/time.h> // TicToc
 
-#define USE_NDT
+#define USE_NDT 1
 
 PointCloudT pclCloud;
 cc::Vehicle::Control control;
@@ -282,7 +282,7 @@ int main()
 
 // TODO: Find pose transform by using ICP or NDT matching
 #ifdef USE_NDT == 1
-			Eigen::Matrix4d transform = NDT(mapCloud, cloudFiltered, pose, 100);
+			Eigen::Matrix4d transform_matrix = NDT(mapCloud, cloudFiltered, pose, 100);
 #else
 			Eigen::Matrix4d transform_matrix = ICP(mapCloud, cloudFiltered, pose, 30);
 #endif
