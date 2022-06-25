@@ -35,6 +35,8 @@ using namespace std;
 #include <pcl/registration/ndt.h>
 #include <pcl/console/time.h> // TicToc
 
+#define USE_NDT
+
 PointCloudT pclCloud;
 cc::Vehicle::Control control;
 std::chrono::time_point<std::chrono::system_clock> currentTime;
@@ -111,6 +113,28 @@ void drawCar(Pose pose, int num, Color color, double alpha, pcl::visualization::
 	renderBox(viewer, box, num, color, alpha);
 }
 
+#ifdef USE_NDT == 1
+Eigen::Matrix4d NDT(PointCloudT::Ptr mapCloud, PointCloudT::Ptr source, Pose startPose, int iterations)
+{
+	Eigen::Matrix4f init_guess = transform3D(startPose.rotation.yaw, startPose.rotation.pitch, startPose.rotation.roll, startPose.position.x,
+											 startPose.position.y, startPose.position.z)
+									 .cast<float>();
+	pcl::NormalDistributionsTransform<PointT, PointT> ndt;
+
+	ndt.setMaximumIterations(iterations);
+	ndt.setTransformationEpsilon(1e-3);
+	ndt.setResolution(5);
+	ndt.setInputSource(source);
+	ndt.setInputTarget(mapCloud);
+
+	PointCloudT::Ptr ndt_cloud(new PointCloudT);
+	ndt.align(*ndt_cloud, init_guess);
+
+	Eigen::Matrix4d transformation_matrix = ndt.getFinalTransformation().cast<double>();
+
+	return transformation_matrix;
+}
+#else
 Eigen::Matrix4d ICP(pcl::PointCloud<PointT>::Ptr target, pcl::PointCloud<PointT>::Ptr source, Pose startPose, int iterations)
 {
 	Eigen::Matrix4d initTransform = transform3D(startPose.rotation.yaw, startPose.rotation.pitch, startPose.rotation.roll, startPose.position.x,
@@ -142,27 +166,7 @@ Eigen::Matrix4d ICP(pcl::PointCloud<PointT>::Ptr target, pcl::PointCloud<PointT>
 		return transformation_matrix;
 	}
 }
-
-Eigen::Matrix4d NDT(PointCloudT::Ptr mapCloud, PointCloudT::Ptr source, Pose startPose, int iterations)
-{
-	Eigen::Matrix4f init_guess = transform3D(startPose.rotation.yaw, startPose.rotation.pitch, startPose.rotation.roll, startPose.position.x,
-											 startPose.position.y, startPose.position.z)
-									 .cast<float>();
-	pcl::NormalDistributionsTransform<PointT, PointT> ndt;
-
-	ndt.setMaximumIterations(iterations);
-	ndt.setTransformationEpsilon(1e-3);
-	ndt.setResolution(5);
-	ndt.setInputSource(source);
-	ndt.setInputTarget(mapCloud);
-
-	PointCloudT::Ptr ndt_cloud(new PointCloudT);
-	ndt.align(*ndt_cloud, init_guess);
-
-	Eigen::Matrix4d transformation_matrix = ndt.getFinalTransformation().cast<double>();
-
-	return transformation_matrix;
-}
+#endif
 
 int main()
 {
@@ -276,9 +280,12 @@ int main()
 			vg.setLeafSize(filterRes, filterRes, filterRes);
 			vg.filter(*cloudFiltered);
 
-			// TODO: Find pose transform by using ICP or NDT matching
-			// Eigen::Matrix4d transform_matrix = ICP(mapCloud, cloudFiltered, pose, 30);
+// TODO: Find pose transform by using ICP or NDT matching
+#ifdef USE_NDT == 1
 			Eigen::Matrix4d transform = NDT(mapCloud, cloudFiltered, pose, 100);
+#else
+			Eigen::Matrix4d transform_matrix = ICP(mapCloud, cloudFiltered, pose, 30);
+#endif
 			pose = getPose(transform_matrix);
 
 			// TODO: Transform scan so it aligns with ego's actual pose and render that scan
